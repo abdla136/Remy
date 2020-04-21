@@ -1,0 +1,275 @@
+---
+title: "Parasites"
+output: html_document
+---
+```{r}
+library(cartography)
+library(ggplot2)
+library(sp)
+library(sf)
+library(stars)
+library(dplyr)
+library(spData)
+#library(sp)
+library(spDataLarge)
+library(raster)
+library(tmap)
+library(leaflet)
+library(mapview)
+library(shiny)
+library(tidyr)
+library(ggspatial)
+library(tidyverse)
+library(ggthemes)
+library(nzcensr)
+library(ggrepel)
+library(raster)
+```
+
+```{r}
+setwd<-("C:/Users/Lama/Dropbox/Lama/5th_year/Parasites/")
+location<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/location.csv")
+#dfrag<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/coinfect_dfrag.csv")
+#Bhom<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/coninfect_Bhom.csv")
+both<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_par.csv")
+bact_par<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_bact_par.csv")
+bacteria<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_bact.csv")
+cryp<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_cryp.csv")
+giardia<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_giar.csv")
+giar_par<-read.csv("/Users/Lama/Dropbox/Lama/5th_year/Parasites/table_giar_par.csv")
+```
+
+```{r}
+colnames(location)[1]<-"Bug"
+location<-location[-c(1),]
+table<-t(location)
+df.long <- pivot_longer(location, cols=-1, names_to = "Location", values_to = "Delay")
+matrix<-as.matrix(df.long)
+df.long$Region<- c("Dunedin City","Dunedin City", "Timaru", "Clutha", "Central Otago", "Queenstown-Lakes", "Southland","Southland", "Gore")
+```
+
+
+
+
+```{r}
+regions_simple_1000 <- st_simplify(regions, dTolerance = 1000)
+# Simplify TA data
+tas_simple_1000 <- st_simplify(tas, dTolerance = 1000)
+
+
+
+tas_centroids <- st_centroid(tas) %>% 
+  bind_cols(st_coordinates(.) %>% data.frame)
+
+# Let's also strip away district from label names as they 
+# just clutter the presentation a little.
+tas_centroids <- 
+  mutate(tas_centroids, 
+         TA2013_NAM = str_replace(TA2013_NAM, " District", ""))
+
+nz_reg<- filter(regions_simple_1000, REGC2013 != 99)
+
+
+nz_regions<-nz_reg[-c(1:9),]
+tas<-tas_simple_1000[-c(1:43,58,67, 68),]
+tas_c<-tas_centroids[-c(1:43,58,67, 68),]
+
+nz_tas <- filter(tas, 
+                 !str_detect(TA2013, "999|067| 076"))
+
+nz_tas_point <- filter(tas_c, 
+                       !str_detect(TA2013_NAM, "Chatham|Area Outside|Auckland"))
+
+#tas_centroids <- st_centroid(tas) %>% 
+ # bind_cols(st_coordinates(.) %>% data.frame)
+
+# Let's also strip away district from label names as they 
+# just clutter the presentation a little.
+#tas_centroids <- 
+  #mutate(tas_centroids, 
+         #TA2013_NAM = str_replace(TA2013_NAM, " District", ""))
+
+
+tas_cent<-tas_centroids%>%
+  filter(TA2013_NAM %in% c("Dunedin City", "Timaru", "Clutha", "Central Otago", "Queenstown-Lakes", "Southland", "Gore"))
+
+t<-tas_cent[rep(seq_len(nrow(tas_cent)), times = c(1,1,1,2,1,2,1)),]
+tassy<-t[rep(seq_len(nrow(t)), each= 2),]
+
+
+colnames(tassy)[2]<-"Region"
+colnames(df.long)[3]<-"Cases"
+
+cb<-c("beige")
+
+df_tas<-merge(df.long, tassy, by = "Region")
+
+df<-distinct(df_tas)
+data1 <- df[df$Bug =="B. hominis +", ]
+data2 <- df[df$Bug =="D. fragilis +", ]
+data2<-data2[c(1,2,4,3,5,6,7,8,9),]
+
+g<-ggplot(nz_regions) +
+  
+  # Add the data
+  geom_sf() + 
+  geom_sf(data = nz_tas, fill = NA, linetype = "dotted", colour= NA) + 
+  #geom_text_repel(data = data1, 
+                 # alpha = 0.9,
+                 # size =4,
+                  #fontface = "bold",
+                 #family = "Ariel Narrow",
+                 # nudge_x = c(1, -1.5, 2, 2, -1), 
+                 # nudge_y = c(0.25, -0.25, 0.5, 0.5, -0.5),
+                  #segment.color = 'grey50')+
+  
+   geom_text_repel(data = data1, 
+                 aes(x = X, y = Y, label = Cases),
+                 alpha = 0.9,
+                 size =5,
+                 fontface= "bold",
+                 family = "Ariel Narrow",
+                 vjust = 0, nudge_y = 0.4,
+                  segment.color = 'gray50')+
+
+#put in points of the data
+geom_point(data = data1, aes(x = X, y = Y, size = Cases, fill =Bug), colour="orangered3", shape=21, stroke = 1.0)+ scale_colour_manual(values = "white")+scale_radius(range=c(1, 30))+  guides(color=guide_legend("Bug"), fill = FALSE)+
+                                                                                                                                                  
+ 
+  # Add the title
+  ggtitle("Cases of B. hominis in the South Island of New Zealand") +
+  
+  # Add north arrow and scale bar
+  #annotation_north_arrow(location = "br", which_north = "true", 
+        #pad_x = unit(0.05, "in"), pad_y = unit(0.2, "in"),
+        #style = north_arrow_fancy_orienteering) + 
+ # annotation_scale(location = "br", width_hint = 0.5) + 
+  
+  # Tinker with the theme a bit. 
+  theme(panel.grid.major = element_line(color = "white",
+        linetype = "dashed", size = 0.5),
+        panel.background = element_rect(fill = "white"), axis.title.x = element_blank(), axis.title.y = element_blank(),axis.text.y = element_blank(), axis.text.x = element_blank())
+
+
+
+gg<-g+scale_fill_manual(values = alpha(c("orangered3"),0.1)) 
+```
+D.fragilis
+```{r}
+d<-ggplot(nz_regions) +
+  
+  # Add the data
+  geom_sf() + 
+  geom_sf(data = nz_tas, fill = NA, linetype = "dotted", colour= NA) + 
+  #geom_text_repel(data = data1, 
+                 # alpha = 0.9,
+                 # size =4,
+                  #fontface = "bold",
+                 #family = "Ariel Narrow",
+                 # nudge_x = c(1, -1.5, 2, 2, -1), 
+                 # nudge_y = c(0.25, -0.25, 0.5, 0.5, -0.5),
+                  #segment.color = 'grey50')+
+  
+   geom_text_repel(data = data2, 
+                 aes(x = X, y = Y, label = Cases),
+                 alpha = 0.9,
+                 size =5,
+                 fontface= "bold",
+                 family = "Ariel Narrow",
+                 vjust = 0, nudge_y = 0.4,
+                  segment.color = 'gray50')+
+
+#put in points of the data
+geom_point(data = data2, aes(x = X, y = Y, size = Cases, fill =Bug), colour="orangered3", shape=21, stroke = 1.0)+ scale_colour_manual(values = "white")+scale_radius(range=c(1, 30))+ guides(color=guide_legend("Bug"), fill = FALSE)+
+                                                                                                                                                  
+ 
+  # Add the title
+  ggtitle("Cases of D. fragilis in the South Island of New Zealand") +
+  
+  # Add north arrow and scale bar
+  #annotation_north_arrow(location = "br", which_north = "true", 
+        #pad_x = unit(0.05, "in"), pad_y = unit(0.2, "in"),
+        #style = north_arrow_fancy_orienteering) + 
+ # annotation_scale(location = "br", width_hint = 0.5) + 
+  
+  # Tinker with the theme a bit. 
+  theme(panel.grid.major = element_line(color = "white",
+        linetype = "dashed", size = 0.5),
+        panel.background = element_rect(fill = "white"),axis.title.x = element_blank(), axis.title.y = element_blank(),axis.text.y = element_blank(), axis.text.x = element_blank())
+
+
+
+dd<-d+scale_fill_manual(values = alpha(c("orangered3"),0.1)) 
+```
+
+```{r}
+
+
+
+both2<-both[,-1]
+rownames(both2)<-both[,1]
+
+bact_par2<-bact_par[,-1]
+rownames(bact_par2)<-bact_par[,1]
+
+bacteria2<-bacteria[,-1]
+rownames(bacteria2)<-bacteria[,1]
+
+
+cryp2<-cryp[,-1]
+rownames(cryp2)<-cryp[,1]
+
+giardia2<-giardia[,-1]
+rownames(giardia2)<-giardia[,1]
+
+gia2<-giar_par[,-1]
+rownames(gia2)<-giar_par[,1]
+
+
+
+fishtest<-function(x){
+my.test<-fisher.test(x, conf.int = TRUE, conf.level = 0.95)
+odds.table=NULL
+odds.table<-cbind(my.test$p.value, my.test$estimate, my.test$conf.int)
+colnames(odds.table) = c("pvalue", "oddsratio", "intervals")
+OR_alpha<-as.data.frame(odds.table)%>%
+  group_by(oddsratio)%>%
+  mutate(intervals = paste(unique(c(intervals)), collapse = '-'))%>%
+   separate(intervals, c("low", "high"), "-")
+  OR_alpha=distinct(OR_alpha)
+  }
+
+  
+ot_both<-fishtest(both2)
+ot_bact_par<-fishtest(bact_par2)
+ot_bacteria<-fishtest(bacteria2)
+ot_cryp<-fishtest(cryp2)
+ot_giardia<-fishtest(giardia2)
+ot_gia<-fishtest(gia2)
+
+
+all<-rbind(ot_both, ot_bact_par, ot_bacteria, ot_cryp, ot_giardia, ot_gia)
+
+all$Parasitic_Infection<-c("both D.fragilis and B. hominis", "bacteria and parasite", "bacteria alone", "Cryptosporidium","Giardia alone", "Giardia and parasite" )
+
+all[,'oddsratio']=round(all[,'oddsratio'],0)
+
+all$Infection1<-c("D. fragilis+ B. hominis", "D. fragilis+ B. hominis", "D. fragilis+ B. hominis", "D. fragilis+ B. hominis", "D. fragilis+ B. hominis" , "D. fragilis+ B. hominis")
+all$Infection2<-c("Only B. hominis or D. fragilis", "Bacteria", "B. hominis/D.fragilis + Bacteria" , "D. fragilis/B. hominis+ Cryptosporidium",  "D. fragilis/B. hominis+ Giardia",  "B. hominis+ Giardia+ D. fragilis" )
+all$Case_numbers<-c("604", "14","40" , "6",  "37", "14" )
+
+#all<-all[c(5,3,6,2,1),]
+```
+
+```{r}
+#AdjustedPvalue<-p.adjust(dump[,8], method="BH")
+#dump<-cbind(dump, AdjustedPvalue)
+all$oddsratio = as.numeric(all$oddsratio)
+
+all_plot <- ggplot(all, aes(x =Infection1, y =Infection2))
+all_odds<-all_plot+geom_point(aes(size=oddsratio, fill=oddsratio), shape=21)+theme(text = element_text(size=20), axis.title.x = element_blank(), axis.title.y = element_blank())+scale_colour_gradient()+theme(panel.background=element_blank(), panel.border = element_rect(colour = "blue", fill=NA, size=1))+scale_radius(range=c(10, 50))+geom_text(aes(label=oddsratio),color ="white") #scale_size_area(max_size = 30)
+
+
+all_cases<-all_plot+geom_point(aes(size=oddsratio, fill=oddsratio), shape=21)+theme(text = element_text(size=20), axis.title.x = element_blank(), axis.title.y = element_blank())+scale_colour_gradient()+theme(panel.background=element_blank(), panel.border = element_rect(colour = "blue", fill=NA, size=1))+scale_radius(range=c(10, 50))+geom_text(aes(label=Case_numbers),color ="white") #scale_size_area(max_size = 30)
+                     
+```
